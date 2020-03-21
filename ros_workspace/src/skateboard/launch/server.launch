@@ -1,0 +1,16 @@
+<launch>
+  <node name="receiver" pkg="skateboard" type="receiver" />
+  <node name="plot_subscriber" pkg="skateboard" type="plot_subscriber" />
+  <node name="parameter_changer" pkg="skateboard" type="parameter_changer" />
+  <node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" />
+  <node name="plotjuggler_with_layout"
+  pkg="plotjuggler"
+  type="PlotJuggler"
+  args="-\-layout $(find skateboard)/config/PlotJuggler_layout.xml"
+  />
+
+  <node name="plotjuggler"
+	pkg="plotjuggler"
+	type="PlotJuggler"
+	/>
+</launch>

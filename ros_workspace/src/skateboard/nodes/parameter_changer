@@ -1,0 +1,161 @@
+#!/usr/bin/env python
+import ctypes
+import rospy
+import select
+import socket
+import struct
+import sys
+
+from dynamic_reconfigure.server import Server
+from skateboard.cfg import reconfigureConfig
+from skateboard.msg import Plot
+
+# parameter_change struct
+parameter_change_format_i = "iii"
+parameter_change_format_f = "ifi"
+parameter_change_sizeof = struct.calcsize(parameter_change_format_i)
+
+udp_port = 6355
+
+controller_ip = "192.168.0.1"
+send_sock = socket.socket(socket.AF_INET,    # Internet
+                          socket.SOCK_DGRAM) # UDP
+
+own_ip = "192.168.0.2"
+
+recv_sock = socket.socket(socket.AF_INET,    # Internet
+                          socket.SOCK_DGRAM) # UDP
+recv_sock.bind((own_ip, udp_port))
+# Holds the current configs, so we only update changes vals
+state = dict()
+
+
+def callback(config, level):
+    global state
+    changed = list()
+    poll_data_mode = False
+
+    if not state:
+        poll_data_mode = True
+        changed.extend(config.keys())
+    else:
+        for param in config:
+            if config[param] != state[param]:
+                changed.append(param)
+
+    accepted_changes = transfer_changes(config, changed, poll_data_mode)
+    state.update(accepted_changes)
+
+    global redraw_function
+
+    if redraw_function:
+        global pub_plot
+        msg = Plot()
+        msg.brk_a = state['motor_response_brk_a']
+        msg.brk_b = state['motor_response_brk_b']
+        msg.brk_c = state['motor_response_brk_c']
+        msg.acc_a = state['motor_response_acc_a']
+        msg.acc_b = state['motor_response_acc_b']
+        msg.acc_c = state['motor_response_acc_c']
+
+        pub_plot.publish(msg)
+        redraw_function = False
+
+    return state
+
+
+def transfer_changes(new_config, changed, poll_data_mode):
+    accepted_changes = list()
+    global redraw_function
+
+    for c in changed:
+        val = new_config[c]
+
+        is_float = False
+        par_id = -1
+
+        if c == "mode":
+            par_id = 0
+        elif c == "motor_response_acc_a":
+            par_id = 1
+            is_float = True
+        elif c == "motor_response_acc_b":
+            par_id = 2
+            is_float = True
+        elif c == "motor_response_acc_c":
+            par_id = 3
+            is_float = True
+        elif c == "motor_response_brk_a":
+            par_id = 4
+            is_float = True
+        elif c == "motor_response_brk_b":
+            par_id = 5
+            is_float = True
+        elif c == "motor_response_brk_c":
+            par_id = 6
+            is_float = True
+        elif c == "diff_window_size":
+            par_id = 7
+        elif c == "motor_full_throttle":
+            par_id = 8
+        elif c == "motor_break":
+            par_id = 9
+        elif c == "motor_gain":
+            par_id = 10
+        elif c == "preset":
+            par_id = 11
+
+        if (par_id < 7) and (par_id > 0):
+            redraw_function = True
+
+        if par_id == -1:
+            accepted_changes.append((c, new_config[c]))
+        else:
+
+            if poll_data_mode:
+                ack_p = 4
+            else:
+                ack_p = 0
+
+            if is_float:
+                request = struct.pack(parameter_change_format_f,
+                                      int(par_id),
+                                      val,
+                                      ack_p)  # ack_p
+            else:
+
+                request = struct.pack(parameter_change_format_i,
+                                      int(par_id),
+                                      val,
+                                      ack_p)  # ack_p
+
+            send_sock.sendto(request, (controller_ip, udp_port))
+
+            data = recv_sock.recv(parameter_change_sizeof)
+
+            if is_float:
+                reply = struct.unpack(parameter_change_format_f, data)
+            else:
+                reply = struct.unpack(parameter_change_format_i, data)
+
+
+            if reply[2] == 1: # "ACK"
+                accepted_changes.append((c, reply[1]))
+            elif reply[2] == 2: # "ERROR val"
+                pass
+            elif reply[2] == 3: # "ERROR id"
+                pass
+
+    return accepted_changes
+
+if __name__ == "__main__":
+    rospy.init_node("ParameterReconfigure", anonymous = False)
+
+    global pub_plot
+    pub_plot = rospy.Publisher('/skateboard/Plot', Plot, queue_size=10)
+
+    global redraw_function
+    redraw_function = False
+    srv = Server(reconfigureConfig, callback)
+    dir(reconfigureConfig)
+    rospy.spin()

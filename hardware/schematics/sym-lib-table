@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name 33iot)(type Legacy)(uri ${KIPRJMOD}/33iot.lib)(options "")(descr ""))
+  (lib (name schematics-cache)(type Legacy)(uri ${KIPRJMOD}/schematics-cache.lib)(options "")(descr ""))
+)

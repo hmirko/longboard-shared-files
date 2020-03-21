@@ -1,0 +1,378 @@
+http://wiki.ros.org/melodic/Installation/Ubuntu
+
+http://wiki.ros.org/ROS/Tutorials
+
+http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber%28python%29
+
+* Installation
+** Configure your Ubuntu repositories
+Configure your Ubuntu repositories to allow "restricted," "universe,"
+and "multiverse." You can follow the Ubuntu guide for instructions on
+doing this.
+
++ Setup your computer to accept software from packages.ros.org.
++ Set up your keys
+
+#+BEGIN_SRC
+  sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu
+  $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros-latest.list'
+
+  sudo apt-key adv --keyserver 'hkp://keyserver.ubuntu.com:80' --recv-key C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654
+  sudo apt update
+  sudo apt install ros-melodic-desktop-full
+#+END_SRC
+
+
+** Initialize rosdep
+
+Before you can use ROS, you will need to initialize rosdep. rosdep
+enables you to easily install system dependencies for source you want
+to compile and is required to run some core components in ROS.
+
+#+BEGIN_SRC
+  sudo rosdep init
+  rosdep update
+#+END_SRC
+
+
+** Environment setup
+
+It's convenient if the ROS environment variables are automatically
+added to your bash session every time a new shell is launched:
+
+#+BEGIN_SRC
+  echo "source /opt/ros/melodic/setup.bash" >> ~/.bashrc
+  source ~/.bashrc
+#+END_SRC
+
+
+** Dependencies for building packages
+
+Up to now you have installed what you need to run the core ROS
+packages. To create and manage your own ROS workspaces, there are
+various tools and requirements that are distributed separately. For
+example, rosinstall is a frequently used command-line tool that
+enables you to easily download many source trees for ROS packages with
+one command.
+
+#+BEGIN_SRC
+  sudo apt install python-rosinstall python-rosinstall-generator python-wstool build-essential
+#+END_SRC
+
+* Work
+** Create a workspace
+
+#+BEGIN_SRC
+$ source /opt/ros/melodic/setup.bash
+$ mkdir -p ~/catkin_ws/src
+$ cd ~/catkin_ws/
+$ catkin_make
+#+END_SRC
+
+Additionally, if you look in your current directory you should now
+have a 'build' and 'devel' folder. Inside the 'devel' folder you can
+see that there are now several setup.*sh files. Sourcing any of these
+files will overlay this workspace on top of your environment. To
+understand more about this see the general catkin documentation:
+catkin. Before continuing source your new setup.*sh file: To make sure
+your workspace is properly overlayed by the setup script, make sure
+ROS_PACKAGE_PATH environment variable includes the directory you're
+in.
+
+#+BEGIN_SRC
+$ source devel/setup.bash
+$ echo $ROS_PACKAGE_PATH
+/home/youruser/catkin_ws/src:/opt/ros/kinetic/share
+#+END_SRC
+
+** Create a package
+For a package to be considered a catkin package it must meet a few requirements:
+
++ The package must contain a catkin compliant package.xml file.  That
+  package.xml file provides meta information about the package.
+
++ The package must contain a CMakeLists.txt which uses catkin.
+
++ If it is a catkin metapackage it must have the relevant boilerplate
+  CMakeLists.txt file.  Each package must have its own folder This
+  means no nested packages nor multiple packages sharing the same
+  directory.
+
+The simplest possible package might have a structure which looks like this:
+
+    my_package/
+      CMakeLists.txt
+      package.xml
+
+The recommended method of working with catkin packages is using a
+catkin workspace, but you can also build catkin packages standalone. A
+trivial workspace might look like this:
+
+    workspace_folder/        -- WORKSPACE
+      src/                   -- SOURCE SPACE
+        CMakeLists.txt       -- 'Toplevel' CMake file, provided by catkin
+        package_1/
+          CMakeLists.txt     -- CMakeLists.txt file for package_1
+          package.xml        -- Package manifest for package_1
+        ...
+        package_n/
+          CMakeLists.txt     -- CMakeLists.txt file for package_n
+          package.xml        -- Package manifest for package_n
+
+
+This tutorial will demonstrate how to use the catkin_create_pkg script
+to create a new catkin package, and what you can do with it after it
+has been created.
+
+First change to the source space directory of the catkin workspace you
+created in the Creating a Workspace for catkin tutorial:
+
+#+BEGIN_SRC
+$ cd ~/catkin_ws/src
+$ catkin_create_pkg beginner_tutorials std_msgs rospy roscpp
+$ cd ~/catkin_ws
+$ catkin_make
+$ . ~/catkin_ws/devel/setup.bash
+#+END_SRC
+
+
+When using catkin_create_pkg earlier, a few package dependencies were
+provided. These first-order dependencies can now be reviewed with the
+rospack tool.
+
+#+BEGIN_SRC
+$ rospack depends1 beginner_tutorials
+
+    roscpp
+    rospy
+    std_msgs
+
+$ roscd beginner_tutorials
+$ cat package.xml
+
+    <package format="2">
+    ...
+      <buildtool_depend>catkin</buildtool_depend>
+      <build_depend>roscpp</build_depend>
+      <build_depend>rospy</build_depend>
+      <build_depend>std_msgs</build_depend>
+    ...
+    </package>
+#+END_SRC
+
+Building
+
+#+BEGIN_SRC
+$ cd ~/catkin_ws/
+$ ls src
+    beginner_tutorials/  CMakeLists.txt@
+
+$ catkin_make
+
+$ ls
+    build
+    devel
+    src
+#+END_SRC
+
+** Custom messages
+#+BEGIN_SRC
+roscd beginner_tutorials
+$ mkdir msg
+$ echo "int64 num" > msg/Num.msg
+#+END_SRC
+
+*** package.xml
+  <build_depend>message_generation</build_depend>
+  <exec_depend>message_runtime</exec_depend>
+
+Note that at build time, we need "message_generation", while at
+runtime, we only need "message_runtime".
+
+*** CMakeLists.txt
+Do not just add this to your CMakeLists.txt, modify the existing text
+to add message_generation before the closing parenthesis.
+
+#+BEGIN_SRC
+find_package(catkin REQUIRED COMPONENTS
+   roscpp
+   rospy
+   std_msgs
+   message_generation
+)
+#+END_SRC
+
+
+You may notice that sometimes your project builds fine even if you did
+not call find_package with all dependencies. This is because catkin
+combines all your projects into one, so if an earlier project calls
+find_package, yours is configured with the same values. But forgetting
+the call means your project can easily break when built in isolation.
+Also make sure you export the message runtime dependency.
+
+#+BEGIN_SRC
+catkin_package(
+  ...
+  CATKIN_DEPENDS message_runtime ...
+  ...)
+
+#+END_SRC
+
+
+Find the following block of code.  Uncomment it by removing the #
+symbols and then replace the stand in Message*.msg files with your
+.msg file, such that it looks like this:
+
+#+BEGIN_SRC
+# add_message_files(
+#   FILES
+#   Message1.msg
+#   Message2.msg
+# )
+
+->
+
+add_message_files(
+  FILES
+  Num.msg
+)
+#+END_SRC
+
+
+For ROS Hydro and later, you need to uncomment these lines:
+
+#+BEGIN_SRC
+# generate_messages(
+#   DEPENDENCIES
+#   std_msgs
+# )
+#+END_SRC
+
+#+BEGIN_SRC
+$ rosmsg show beginner_tutorials/Num
+    int64 num
+#+END_SRC
+
+In Python
+#+BEGIN_SRC
+from std_msgs.msg import String
+msg = String()
+#+END_SRC
+** rqt reconfigure
+*** Python dyn reconfigure client
+http://wiki.ros.org/dynamic_reconfigure/Tutorials/UsingTheDynamicReconfigurePythonClient
+
+http://wiki.ros.org/dynamic_reconfigure/Tutorials/SettingUpDynamicReconfigureForANode%28python%29
+*** How to Write Your First .cfg File
+http://wiki.ros.org/dynamic_reconfigure/Tutorials/HowToWriteYourFirstCfgFile
+To begin lets create a package called dynamic_tutorials which depends
+on rospy, roscpp and dynamic_reconfigure.
+
+#+BEGIN_SRC
+$ catkin_create_pkg --rosdistro ROSDISTRO dynamic_tutorials rospy roscpp dynamic_reconfigure
+$ mkdir cfg
+#+END_SRC
+
+#+BEGIN_SRC
+#!/usr/bin/env python
+PACKAGE = "dynamic_tutorials"
+
+from dynamic_reconfigure.parameter_generator_catkin import *
+
+gen = ParameterGenerator()
+
+gen.add("int_param",    int_t,    0, "An Integer parameter", 50,  0, 100)
+gen.add("double_param", double_t, 0, "A double parameter",    .5, 0,   1)
+gen.add("str_param",    str_t,    0, "A string parameter",  "Hello World")
+gen.add("bool_param",   bool_t,   0, "A Boolean parameter",  True)
+
+size_enum = gen.enum([ gen.const("Small",      int_t, 0, "A small constant"),
+                       gen.const("Medium",     int_t, 1, "A medium constant"),
+                       gen.const("Large",      int_t, 2, "A large constant"),
+                       gen.const("ExtraLarge", int_t, 3, "An extra large constant")],
+                     "An enum to set size")
+
+gen.add("size", int_t, 0, "A size parameter which is edited via an enum", 1, 0, 3, edit_method=size_enum)
+
+exit(gen.generate(PACKAGE, "dynamic_tutorials", "Tutorials"))
+
+#+END_SRC
+
+Now that we have a generator we can start to define parameters. The add function adds a parameter to the list of parameters. It takes a few different arguments:
+
++ name - a string which specifies the name under which this parameter
+  should be stored
++ paramtype - defines the type of value stored, and can be any of
+  int_t, double_t, str_t, or bool_t
++ level - A bitmask which will later be passed to the dynamic
+  reconfigure callback. When the callback is called all of the level
+  values for parameters that have been changed are ORed together and
+  the resulting value is passed to the callback.
++ description - string which describes the parameter
++ default - specifies the default value
++ min - specifies the min value (optional and does not apply to
+  strings and bools)
++ max - specifies the max value (optional and does not apply to
+  strings and bools)
+
+#+BEGIN_SRC
+gen.add("int_param",    int_t,    0, "An Integer parameter", 50,  0, 100)
+gen.add("double_param", double_t, 0, "A double parameter",    .5, 0,   1)
+gen.add("str_param",    str_t,    0, "A string parameter",  "Hello World")
+gen.add("bool_param",   bool_t,   0, "A Boolean parameter",  True)
+#+END_SRC
+
+#+BEGIN_SRC
+size_enum = gen.enum([ gen.const("Small",      int_t, 0, "A small constant"),
+                       gen.const("Medium",     int_t, 1, "A medium constant"),
+                       gen.const("Large",      int_t, 2, "A large constant"),
+                       gen.const("ExtraLarge", int_t, 3, "An extra large constant")],
+                       "An enum to set size")
+
+gen.add("size", int_t, 0, "A size parameter which is edited via an
+enum", 1, 0, 3, edit_method=size_enum)
+exit(gen.generate(PACKAGE, "dynamic_tutorials", "Tutorials"))
+#+END_SRC
+
+
+Here we define an integer whose value is set by an enum. To do this we
+call gen.enum and pass it a list of constants followed by a
+description of the enum. Now that we have created an enum we can now
+pass it to the generator. Now the param can be set with "Small" or
+"Medium" rather than 0 or 1.
+
+The last line simply tells the generator to generate the necessary
+files and exit the program. The second parameter is the name of a node
+this could run in (used to generate documentation only), the third
+parameter is a name prefix the generated files will get
+(e.g. "<name>Config.h" for c++, or "<name>Config.py" for python.
+
+NOTE: The third parameter should be equal to the cfg file name,
+without extension. Otherwise the libraries will be generated in every
+build, forcing a recompilation of the nodes which use them.
+
+**** Use the cfg File
+
+In order to make this cfg file usable it must be executable, so lets
+use the following command to make it excecutable
+
+chmod a+x cfg/Tutorials.cfg
+
+Next we need to add the following lines to our CMakeLists.txt. For
+Groovy and above
+
+#add dynamic reconfigure api
+#find_package(catkin REQUIRED dynamic_reconfigure)
+generate_dynamic_reconfigure_options(
+  cfg/Tutorials.cfg
+  #...
+)
+
+# make sure configure headers are built before any node using them
+add_dependencies(example_node ${PROJECT_NAME}_gencfg)
+
+Note that you need a node example_node that is already built, before
+the add_dependencies line is reached (ref Create a node in C++).
+
+This will run our cfg when the package is built. The last thing to do
+is to build the package and we're done!
